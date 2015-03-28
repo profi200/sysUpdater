@@ -1,0 +1,7 @@
+*~
+*.3dsx
+*.elf
+*.smdh
+*.bat
+Thumbs.db
+build/
