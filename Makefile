@@ -134,8 +134,14 @@ $(BUILD):
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf
+	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf $(TARGET).cia $(TARGET)-strip.elf
 
+
+#---------------------------------------------------------------------------------
+$(TARGET)-strip.elf: $(BUILD)
+	$(STRIP) $(TARGET).elf -o $(TARGET)-strip.elf
+cia: $(TARGET)-strip.elf
+	$(DEVKITARM)/bin/makerom -f cia -o $(TARGET).cia -elf $(TARGET)-strip.elf -rsf $(CURDIR)/app/build-cia.rsf -icon $(CURDIR)/app/icon.icn -banner $(CURDIR)/app/banner.bnr -exefslogo -target t
 
 #---------------------------------------------------------------------------------
 else
