@@ -88,7 +88,7 @@ int main()
 		{
 			for(i=0; i<fileCount; i++)
 			{
-				if(strncmp(&entries[folderCount+i].name[strlen(entries[folderCount+i].name)-4], ".cia", 3) == 0)
+				if(strncmp(&entries[folderCount+i].name[strlen(entries[folderCount+i].name)-4], ".cia", 4) == 0)
 				{
 					addToPath(basePath, entries[folderCount+i].name);
 					printf("%s", entries[folderCount+i].name);
