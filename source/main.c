@@ -36,9 +36,6 @@ void __appExit()
 
 void printResult(Result res)
 {
-
-
-
 	switch(res)
 	{
 		case 0:
@@ -69,12 +66,14 @@ int main()
 
 	res = getFilesFolders(basePath, &sdmcArchive, &folderCount, &fileCount, entries);
 	consoleInit(GFX_TOP, NULL);
-	printf("sysUpdater 0.2 by profi200\n\n\n");
+	printf("sysUpdater 0.3 by profi200\n\n\n");
 	printf("Press (A) to update or (B) to exit.\n");
 	printf("If you run the CIA version you can just close this app now. ");
 	printf("If you started the update you can't abort it!\n\n");
-	if(res) printf("\x1b[31mError: '/updates' doesn't exist!\n");
+	printf("\x1b[31mIMPORTANT: Don't run this in sysNAND Gateway mode or it will brick!\n\n");
+	if(res) printf("Error: '/updates' doesn't exist!\n");
 	if(!fileCount) printf("Nothing to install.\n");
+	printf("\x1b[0m"); // Reset colors
 
 
 	while(aptMainLoop())

@@ -4,6 +4,8 @@ A quick tool for manually updating a 3DS using CIA files.
 
 This is not intended for installing anything else!
 
+# Don't run this in sysNAND Gateway mode or it will brick your sysNAND! This is not my fault. Please ask Gateway to remove their NATIVE_FIRM update block!
+
 
 ### How to use
 

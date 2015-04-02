@@ -19,7 +19,6 @@ typedef struct
 } DirEntry;
 
 
-//Result FSUSER_ControlArchive(Handle *handle, FS_archive *archive);
 inline Result addToPath(char *path, char *dirOrFile);
 inline void removeFromPath(char *path);
 void sdmcArchiveInit();
