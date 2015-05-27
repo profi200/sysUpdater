@@ -17,32 +17,19 @@
  */
 
 
-#ifndef _MISC_H_
-#define _MISC_H_
-
-#include <cstring>
+#include <string>
 #include <3ds.h>
+#include "misc.h"
 #include "fs.h"
 
 
 
-template<class T>
-class Buffer
+// Simple std::sort() compar function for file names
+bool fileNameCmp(fs::DirEntry& first, fs::DirEntry& second)
 {
-	const u32 elements;
-	T *ptr;
+	if(first.isDir && (!second.isDir)) return true;
+	else if((!first.isDir) && second.isDir) return false;
 
-public:
-	Buffer(u32 elementCnt) : elements(elementCnt) {ptr = new T[elementCnt];}
-	~Buffer() {delete[] ptr;}
 
-	void clear() {memset(ptr, 0, size());}
-	u32 size() {return elements*sizeof(T);}
-
-	T* operator &() {return ptr;}
-	T& operator [](u32 element) {return ptr[element];}
-};
-
-bool fileNameCmp(fs::DirEntry& first, fs::DirEntry& second);
-
-#endif // _MISC_H_
+	return (first.name.compare(second.name)<0);
+}

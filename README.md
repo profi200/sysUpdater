@@ -17,4 +17,5 @@ This is not intended for installing anything else! You also should strictly avoi
 3. Create update CIAs from Nintendos update server or get them from gamecards.
   * With [3DNUS](http://gbatemp.net/threads/3dnus.376488) for example.
 4. Place all the created .cia files in the update dir you created in step 2.
-5. Start the app and follow the instructions.
+5. Start the app and follow the instructions. Downgrade means it uninstalls the title first if
+   the installed versions are newer.
