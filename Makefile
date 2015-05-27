@@ -28,9 +28,9 @@ include $(DEVKITARM)/3ds_rules
 #---------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
-SOURCES		:=	source source/zip
+SOURCES		:=	source
 DATA		:=	data
-INCLUDES	:=	include include/zip
+INCLUDES	:=	include
 
 APP_TITLE		:=	sysUpdater
 APP_DESCRIPTION		:=	sysUpdater
