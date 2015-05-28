@@ -70,7 +70,7 @@ int versionCmp(std::vector<TitleInfo>& installedTitles, u64& titleID, u16 versio
 		}
 	}
 
-	return 0; // The title is not installed
+	return 1; // The title is not installed
 }
 
 
@@ -100,7 +100,7 @@ void installUpdates(bool downgrade)
 			if((downgrade && cmpResult != 0) || (cmpResult > 0))
 			{
 				if(cmpResult < 0) deleteTitle(mediatype_NAND, ciaFileInfo.titleID);
-				if(ciaFileInfo.titleID == 0x0004013800000002LL)
+				if(ciaFileInfo.titleID == 0x0004013800000002LL || ciaFileInfo.titleID == 0x0004013820000002LL)
 				{
 					printf("NATIVE_FIRM         ");
 					installCia(mediatype_NAND, u"/updates/" + it.name);
@@ -132,7 +132,7 @@ int main()
 
 
 	consoleInit(GFX_TOP, NULL);
-	printf("sysUpdater 0.4b by profi200\n\n\n");
+	printf("sysUpdater 0.4 by profi200\n\n\n");
 	printf("(A) update\n(Y) downgrade\n(B) exit\n\n");
 	printf("Use the HOME button if you run the CIA version.\n");
 	printf("If you started the update you can't abort it!\n\n");
