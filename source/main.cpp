@@ -94,7 +94,7 @@ void installUpdates(bool downgrade)
 		if(!it.isDir && (it.name.compare(it.name.length()-4, 4, u".cia") == 0))
 		{
 			f.open(u"/updates/" + it.name, FS_OPEN_READ);
-			if((res = AM_GetCiaFileInfo(mediatype_NAND, &ciaFileInfo, f.getFileHandle()))) throw error(_FILE_, __LINE__, res);
+			if((res = AM_GetCiaFileInfo(mediatype_NAND, &ciaFileInfo, f.getFileHandle()))) throw titleException(_FILE_, __LINE__, res, "Failed to get CIA file info!");
 
 			int cmpResult = versionCmp(installedTitles, ciaFileInfo.titleID, ciaFileInfo.titleVersion);
 			if((downgrade && cmpResult != 0) || (cmpResult > 0))
@@ -104,7 +104,7 @@ void installUpdates(bool downgrade)
 				{
 					printf("NATIVE_FIRM         ");
 					installCia(mediatype_NAND, u"/updates/" + it.name);
-					if((res = AM_InstallNativeFirm())) throw error(_FILE_, __LINE__, res);
+					if((res = AM_InstallNativeFirm())) throw titleException(_FILE_, __LINE__, res, "Failed to install NATIVE_FIRM!");
 					printf("\x1b[32m  Installed\x1b[0m\n");
 				}
 				else remainingCias.push_back(it.name);
@@ -132,7 +132,7 @@ int main()
 
 
 	consoleInit(GFX_TOP, NULL);
-	printf("sysUpdater 0.4 by profi200\n\n\n");
+	printf("sysUpdater 0.4.1 by profi200\n\n\n");
 	printf("(A) update\n(Y) downgrade\n(B) exit\n\n");
 	printf("Use the HOME button if you run the CIA version.\n");
 	printf("If you started the update you can't abort it!\n\n");
@@ -162,9 +162,15 @@ int main()
 					aptCloseSession();
 					once = true;
 				}
-				catch(error& e)
+				catch(fsException& e)
 				{
-					printf("%s\n", e.what());
+					printf("\n%s\n", e.what());
+					printf("Did you store the update files in '/updates'?");
+					once = true;
+				}
+				catch(titleException& e)
+				{
+					printf("\n%s\n", e.what());
 					once = true;
 				}
 			}

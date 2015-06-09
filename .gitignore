@@ -1,7 +1,10 @@
 *~
+*.3ds
+*.cia
+*.smdh
 *.3dsx
 *.elf
-*.smdh
 *.bat
+*.layout
 Thumbs.db
 build/

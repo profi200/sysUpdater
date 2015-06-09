@@ -29,14 +29,4 @@
 
 
 
-struct error: public std::exception
-{
-	char errStr[256];
-
-
-	error(const char *file, const int line, const Result res) {snprintf(errStr, 255, "%s:%d: Error: 0x%X", file, line, (unsigned int)res);}
-
-	virtual const char* what() {return errStr;}
-};
-
 #endif // _ERROR_H_

@@ -80,14 +80,14 @@ $(RESOURCE)/%.icn : $(RESOURCE)/banner.png $(RESOURCE)/icon24x24.png $(RESOURCE)
 .PRECIOUS: $(PROJECT_NAME)_debug.elf
 $(PROJECT_NAME)_debug.elf : Makefile
 #---------------------------------------------------------------------------------
-	@make
+	@make -j4
 	@cp $(PROJECT_NAME).elf $(PROJECT_NAME)_debug.elf
 
 #---------------------------------------------------------------------------------
 .PRECIOUS: %.elf
 %.elf : Makefile
 #---------------------------------------------------------------------------------
-	@make
+	@make -j4
 
 
 clean :

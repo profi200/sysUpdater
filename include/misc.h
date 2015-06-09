@@ -33,7 +33,8 @@ class Buffer
 	T *ptr;
 
 public:
-	Buffer(u32 elementCnt) : elements(elementCnt) {ptr = new T[elementCnt];}
+	// Clears mem by default to avoid problems
+	Buffer(u32 elementCnt, bool clearMem=true) : elements(elementCnt) {ptr = new T[elementCnt]; if(clearMem) clear();}
 	~Buffer() {delete[] ptr;}
 
 	void clear() {memset(ptr, 0, size());}

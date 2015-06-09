@@ -22,7 +22,6 @@
 #include <vector>
 #include <ctime>
 #include <3ds.h>
-#include "error.h"
 #include "fs.h"
 #include "misc.h"
 
@@ -39,13 +38,6 @@ namespace fs
 	// class File                                  ||
 	//===============================================
 
-	// Default: read + write + create, sdmcArchive
-	File::File(const std::u16string& path, u32 openFlags, FS_archive& archive)
-	{
-		open(path, openFlags, archive);
-	}
-
-
 	void File::open(const std::u16string& path, u32 openFlags, FS_archive& archive)
 	{
 		FS_path filePath = {PATH_WCHAR, (path.length()*2)+2, (const u8*)path.c_str()};
@@ -58,22 +50,23 @@ namespace fs
 
 
 
-		seek(0, FS_SEEK_SET); // Reset current offset
 		close(); // Close file handle before we open a new one
+		seek(0, FS_SEEK_SET); // Reset current offset
 		if((res = FSUSER_OpenFile(nullptr, &_fileHandle_, archive, filePath, openFlags, FS_ATTRIBUTE_NONE)))
-			throw error(_FILE_, __LINE__, res);
+			throw fsException(_FILE_, __LINE__, res, "Failed to open file!");
 	}
 
 
 	u32 File::read(void *buf, u32 size)
 	{
+		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
+
 		u32 bytesRead;
 		Result res;
 
 
-
 		if((res = FSFILE_Read(_fileHandle_, &bytesRead, _offset_, buf, size)))
-			throw error(_FILE_, __LINE__, res);
+			throw fsException(_FILE_, __LINE__, res, "Failed to read from file!");
 
 		_offset_ += bytesRead;
 		return bytesRead;
@@ -82,13 +75,14 @@ namespace fs
 
 	u32 File::write(const void *buf, u32 size)
 	{
+		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
+
 		u32 bytesWritten;
 		Result res;
 
 
-
 		if((res = FSFILE_Write(_fileHandle_, &bytesWritten, _offset_, buf, size, FS_WRITE_FLUSH)))
-			throw error(_FILE_, __LINE__, res);
+			throw fsException(_FILE_, __LINE__, res, "Failed to write to file!");
 
 		_offset_ += bytesWritten;
 		return bytesWritten;
@@ -113,12 +107,13 @@ namespace fs
 
 	u64 File::size()
 	{
+		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
+
 		u64 tmp;
 		Result res;
 
 
-
-		if((res = FSFILE_GetSize(_fileHandle_, &tmp))) throw error(_FILE_, __LINE__, res);
+		if((res = FSFILE_GetSize(_fileHandle_, &tmp))) throw fsException(_FILE_, __LINE__, res, "Failed to get file size!");
 
 		return tmp;
 	}
@@ -126,32 +121,37 @@ namespace fs
 
 	void File::setSize(const u64 size)
 	{
+		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
+
 		Result res;
 
 
-
-		if((res = FSFILE_SetSize(_fileHandle_, size))) throw error(_FILE_, __LINE__, res);
+		if((res = FSFILE_SetSize(_fileHandle_, size))) throw fsException(_FILE_, __LINE__, res, "Failed to set file size!");
 	}
 
 
 	// This can also be used to rename files
 	void File::move(const std::u16string& dst, FS_archive& dstArchive)
 	{
+		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
+
 		FS_path srcPath = {PATH_WCHAR, (_path_.length()*2)+2, (const u8*)_path_.c_str()};
 		FS_path dstPath = {PATH_WCHAR, (dst.length()*2)+2, (const u8*)dst.c_str()};
 		Result res;
 
 
-
 		close(); // Close file handle before we open a new one
-		if((res = FSUSER_RenameFile(nullptr, *_archive_, srcPath, dstArchive, dstPath))) throw error(_FILE_, __LINE__, res);
+		if((res = FSUSER_RenameFile(nullptr, *_archive_, srcPath, dstArchive, dstPath)))
+			throw fsException(_FILE_, __LINE__, res, "Failed to move file!");
 		open(dst, _openFlags_ & 3, dstArchive); // Open moved file
 	}
 
 
 	void File::copy(const std::u16string& dst, FS_archive& dstArchive)
 	{
-		File outFile(dst, FS_OPEN_WRITE | FS_OPEN_CREATE, dstArchive);
+		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
+
+		File outFile(dst, FS_OPEN_WRITE|FS_OPEN_CREATE, dstArchive);
 		u32 blockSize;
 		u64 inFileSize, offset = 0;
 
@@ -162,7 +162,7 @@ namespace fs
 		outFile.setSize(inFileSize);
 
 
-		Buffer<u8> buffer(MAX_BUF_SIZE);
+		Buffer<u8> buffer(MAX_BUF_SIZE, false);
 
 
 		for(u32 i=0; i<=inFileSize / MAX_BUF_SIZE; i++)
@@ -182,17 +182,20 @@ namespace fs
 
 	void File::remove(const std::u16string& path, FS_archive& archive)
 	{
+		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
+
 		FS_path lowPath = {PATH_WCHAR, (path.length()*2)+2, (const u8*)path.c_str()};
 		Result res;
 
 
-
-		if((res = FSUSER_DeleteFile(nullptr, archive, lowPath))) throw error(_FILE_, __LINE__, res);
+		if((res = FSUSER_DeleteFile(nullptr, archive, lowPath))) throw fsException(_FILE_, __LINE__, res, "Failed to remove file!");
 	}
 
 
 	void File::remove()
 	{
+		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
+
 		close(); // Close file handle before we can delete this file
 		remove(_path_, *_archive_);
 	}
@@ -206,12 +209,17 @@ namespace fs
 	void makeDir(const std::u16string& path, FS_archive& archive)
 	{
 		FS_path dirPath = {PATH_WCHAR, (path.length()*2)+2, (const u8*)path.c_str()};
+		Handle dirHandle;
 		Result res;
 
 
-
-		if((res = FSUSER_CreateDirectory(nullptr, archive, dirPath)) != FS_ERR_DOES_ALREADY_EXIST && res != 0)
-			throw error(_FILE_, __LINE__, res);
+		if(!FSUSER_OpenDirectory(nullptr, &dirHandle, archive, dirPath))
+		{
+			if((res = FSDIR_Close(dirHandle))) throw fsException(_FILE_, __LINE__, res, "Failed to close directory!");
+			return;
+		}
+		if((res = FSUSER_CreateDirectory(nullptr, archive, dirPath)))
+			throw fsException(_FILE_, __LINE__, res, "Failed to create directory!");
 	}
 
 
@@ -221,7 +229,7 @@ namespace fs
 		size_t found = 0;
 
 
-
+		if(path.length() < 2) return;
 		while(found != std::u16string::npos)
 		{
 			found = path.find_first_of(u"/", found+1);
@@ -239,28 +247,25 @@ namespace fs
 
 		FS_path dirPath = {PATH_WCHAR, (path.length()*2)+2, (const u8*)path.c_str()};
 		std::vector<DirEntry> filesFolders;
-		DirEntry tmp;
 
 
 
-		if((res = FSUSER_OpenDirectory(nullptr, &dirHandle, archive, dirPath))) throw error(_FILE_, __LINE__, res);
+		if((res = FSUSER_OpenDirectory(nullptr, &dirHandle, archive, dirPath)))
+			throw fsException(_FILE_, __LINE__, res, "Failed to open directory!");
 
 
-		Buffer<FS_dirent> entries(32);
+		Buffer<FS_dirent> entries(32, false);
 
 
 		do
 		{
 			entriesRead = 0;
 			filesFolders.reserve(filesFolders.size()+32); // Save time by reserving enough mem
-			if((res = FSDIR_Read(dirHandle, &entriesRead, 32, &entries))) throw error(_FILE_, __LINE__, res);
+			if((res = FSDIR_Read(dirHandle, &entriesRead, 32, &entries))) throw fsException(_FILE_, __LINE__, res, "Failed to read directory!");
 
 			for(u32 i=0; i<entriesRead; i++)
 			{
-				tmp.name = (char16_t*)entries[i].name;
-				tmp.isDir = entries[i].isDirectory;
-				tmp.size = entries[i].fileSize;
-				filesFolders.push_back(tmp);
+				filesFolders.push_back(DirEntry((char16_t*)entries[i].name, entries[i].isDirectory, entries[i].fileSize));
 			}
 		} while(entriesRead == 32);
 
@@ -274,7 +279,7 @@ namespace fs
 
 
 
-		if((res = FSDIR_Close(dirHandle))) throw error(_FILE_, __LINE__, res);
+		if((res = FSDIR_Close(dirHandle))) throw fsException(_FILE_, __LINE__, res, "Failed to close directory!");
 
 		return filesFolders;
 	}
@@ -283,7 +288,7 @@ namespace fs
 	void copyDir(const std::u16string& src, const std::u16string& dst, FS_archive& srcArchive, FS_archive& dstArchive)
 	{
 		u32 depth = 0;
-		u16 helper[64]; // Anyone uses higher dir depths?
+		u16 helper[128]; // Anyone uses higher dir depths?
 		File f;
 
 		std::u16string tmpInPath(src);
@@ -312,12 +317,12 @@ namespace fs
 
 			if((helper[depth]>=entries.size()) ? 0 : entries[helper[depth]].isDir) continue;
 
-			for(auto i : entries)
+			for(auto it : entries)
 			{
-				if(!i.isDir)
+				if(!it.isDir)
 				{
-					addToPath(tmpInPath, i.name);
-					addToPath(tmpOutPath, i.name);
+					addToPath(tmpInPath, it.name);
+					addToPath(tmpOutPath, it.name);
 					f.open(tmpInPath, FS_OPEN_READ, srcArchive);
 					f.copy(tmpOutPath, dstArchive);
 					removeFromPath(tmpInPath);
@@ -342,8 +347,8 @@ namespace fs
 		Result res;
 
 
-
-		if((res = FSUSER_DeleteDirectoryRecursively(nullptr, archive, dirPath))) throw error(_FILE_, __LINE__, res);
+		if((res = FSUSER_DeleteDirectoryRecursively(nullptr, archive, dirPath)))
+			throw fsException(_FILE_, __LINE__, res, "Failed to remove directory!");
 	}
 
 
@@ -351,7 +356,8 @@ namespace fs
 	// Zip related functions                       ||
 	//===============================================
 
-	// Removed. Will be available if it is ready.
+
+	// snipped zip functions
 
 
 	//===============================================
@@ -360,8 +366,8 @@ namespace fs
 
 	void addToPath(std::u16string& path, const std::u16string& dirOrFile)
 	{
-		if(path.length()>1) path.append(u"/" + dirOrFile);
-		else path.append(dirOrFile);
+		if(path.length()>1) path += (u"/" + dirOrFile);
+		else path += dirOrFile;
 	}
 
 

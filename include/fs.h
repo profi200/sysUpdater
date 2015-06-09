@@ -20,17 +20,36 @@
 #ifndef _FS_H_
 #define _FS_H_
 
+#include <exception>
 #include <string>
 #include <vector>
+#include <cstdio>
 #include <3ds.h>
 
-#define FS_PATH_MAX_LENGTH        (0x106)
-#define MAX_BUF_SIZE              (0x200000) // 2 MB
-#define FS_ERR_DOESNT_EXIST       ((Result)0xC8804478)
-#define FS_ERR_DOES_ALREADY_EXIST ((Result)0xC82044BE)
+#define FS_PATH_MAX_LENGTH         (0x106)
+#define MAX_BUF_SIZE               (0x200000) // 2 MB
+#define FS_ERR_DOESNT_EXIST        ((Result)0xC8804478)
+#define FS_ERR_DOES_ALREADY_EXIST  ((Result)0xC82044BE) // Sometimes the API returns 0xC82044B9 instead
 
 
 extern FS_archive sdmcArchive;
+
+class fsException : public std::exception
+{
+	char errStr[256];
+	Result res;
+
+
+public:
+	fsException(const char *file, const int line, const Result res, const char *desc)
+	{
+    this->res = res;
+		snprintf(errStr, 255, "fsException:\n%s:%d: Result: 0x%X\n%s", file, line, (unsigned int)res, desc);
+	}
+
+	virtual const char* what() {return errStr;}
+	const Result getErrCode() {return res;}
+};
 
 typedef enum
 {
@@ -53,7 +72,7 @@ namespace fs
 
 
 	public:
-		File(const std::u16string& path, u32 openFlags, FS_archive& archive=sdmcArchive);
+		File(const std::u16string& path, u32 openFlags, FS_archive& archive=sdmcArchive) {open(path, openFlags, archive);}
 		File() {}
 		~File() {close();}
 
@@ -68,7 +87,7 @@ namespace fs
 		void move(const std::u16string& dst, FS_archive& dstArchive=sdmcArchive);
 		void copy(const std::u16string& dst, FS_archive& dstArchive=sdmcArchive);
 		void remove(const std::u16string& path, FS_archive& archive=sdmcArchive);
-		void remove();
+		void remove(); // Removes the currently opened file
 
 		// Don't use setFileHandle() for normal files! Only for AM file handles or similar.
 		Handle getFileHandle() {return _fileHandle_;}
@@ -81,6 +100,8 @@ namespace fs
 		std::u16string name;
 		bool isDir;
 		u64 size;
+
+		DirEntry(std::u16string name, bool isDir, u64 size) : name(name), isDir(isDir), size(size) {}
 	};
 
 
@@ -92,7 +113,7 @@ namespace fs
 	void removeDir(const std::u16string& path, FS_archive& archive=sdmcArchive);
 
 
-	// Removed zip functions
+	// snipped zip functions
 
 
 	// Misc functions
@@ -101,7 +122,6 @@ namespace fs
 } // namespace fs
 
 
-//Result FSUSER_ControlArchive(Handle *handle, FS_archive *archive);
 void sdmcArchiveInit();
 void sdmcArchiveExit();
 
