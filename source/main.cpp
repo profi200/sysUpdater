@@ -30,6 +30,10 @@
 
 
 
+// Fix compile error. This should be properly initialized if you fiddle with the title stuff!
+u8 sysLang = 0;
+
+
 // Override the default service init/exit functions
 extern "C"
 {
@@ -77,7 +81,7 @@ int versionCmp(std::vector<TitleInfo>& installedTitles, u64& titleID, u16 versio
 // If downgrade is true we don't care about versions (except equal versions) and uninstall newer versions
 void installUpdates(bool downgrade)
 {
-	std::vector<fs::DirEntry> filesDirs = fs::listDirContents(u"/updates");
+	std::vector<fs::DirEntry> filesDirs = fs::listDirContents(u"/updates", u".cia;"); // Filter for .cia files
 	std::vector<TitleInfo> installedTitles = getTitleInfos(mediatype_NAND);
 	std::vector<std::u16string> remainingCias;
 	Buffer<char> tmpStr(256);
@@ -91,7 +95,7 @@ void installUpdates(bool downgrade)
 
 	for(auto it : filesDirs)
 	{
-		if(!it.isDir && (it.name.compare(it.name.length()-4, 4, u".cia") == 0))
+		if(!it.isDir)
 		{
 			f.open(u"/updates/" + it.name, FS_OPEN_READ);
 			if((res = AM_GetCiaFileInfo(mediatype_NAND, &ciaFileInfo, f.getFileHandle()))) throw titleException(_FILE_, __LINE__, res, "Failed to get CIA file info!");
@@ -103,7 +107,7 @@ void installUpdates(bool downgrade)
 				if(ciaFileInfo.titleID == 0x0004013800000002LL || ciaFileInfo.titleID == 0x0004013820000002LL)
 				{
 					printf("NATIVE_FIRM         ");
-					installCia(mediatype_NAND, u"/updates/" + it.name);
+					installCia(u"/updates/" + it.name, mediatype_NAND);
 					if((res = AM_InstallNativeFirm())) throw titleException(_FILE_, __LINE__, res, "Failed to install NATIVE_FIRM!");
 					printf("\x1b[32m  Installed\x1b[0m\n");
 				}
@@ -119,7 +123,7 @@ void installUpdates(bool downgrade)
 		utf16_to_utf8((u8*)&tmpStr, (u16*)it.c_str(), 255);
 
 		printf("%s", &tmpStr);
-		installCia(mediatype_NAND, u"/updates/" + it);
+		installCia(u"/updates/" + it, mediatype_NAND);
 		printf("\x1b[32m  Installed\x1b[0m\n");
 	}
 }
@@ -132,7 +136,7 @@ int main()
 
 
 	consoleInit(GFX_TOP, NULL);
-	printf("sysUpdater 0.4.1 by profi200\n\n\n");
+	printf("sysUpdater 0.4.2b by profi200\n\n\n");
 	printf("(A) update\n(Y) downgrade\n(B) exit\n\n");
 	printf("Use the HOME button if you run the CIA version.\n");
 	printf("If you started the update you can't abort it!\n\n");

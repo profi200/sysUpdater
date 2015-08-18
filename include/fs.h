@@ -21,10 +21,12 @@
 #define _FS_H_
 
 #include <exception>
+#include <functional>
 #include <string>
 #include <vector>
 #include <cstdio>
 #include <3ds.h>
+#include "zip.h"
 
 #define FS_PATH_MAX_LENGTH         (0x106)
 #define MAX_BUF_SIZE               (0x200000) // 2 MB
@@ -47,7 +49,7 @@ public:
 		snprintf(errStr, 255, "fsException:\n%s:%d: Result: 0x%X\n%s", file, line, (unsigned int)res, desc);
 	}
 
-	virtual const char* what() {return errStr;}
+	virtual const char* what() const noexcept {return errStr;}
 	const Result getErrCode() {return res;}
 };
 
@@ -73,27 +75,44 @@ namespace fs
 
 	public:
 		File(const std::u16string& path, u32 openFlags, FS_archive& archive=sdmcArchive) {open(path, openFlags, archive);}
+		File(const FS_path& lowPath, u32 openFlags, FS_archive& archive=sdmcArchive) {open(lowPath, openFlags, archive);}
 		File() {}
 		~File() {close();}
 
+
 		void open(const std::u16string& path, u32 openFlags, FS_archive& archive=sdmcArchive);
+		void open(const FS_path& lowPath, u32 openFlags, FS_archive& archive=sdmcArchive);
 		u32  read(void *buf, u32 size);
 		u32  write(const void *buf, u32 size);
-		void close() {if(_fileHandle_) FSFILE_Close(_fileHandle_); _fileHandle_ = 0;}
+		void flush();
 		void seek(const u64 offset, fsSeekMode mode);
 		u64  tell() {return _offset_;}
 		u64  size();
 		void setSize(const u64 size);
+		void close() {if(_fileHandle_) FSFILE_Close(_fileHandle_); _fileHandle_ = 0;}
 		void move(const std::u16string& dst, FS_archive& dstArchive=sdmcArchive);
-		void copy(const std::u16string& dst, FS_archive& dstArchive=sdmcArchive);
-		void remove(const std::u16string& path, FS_archive& archive=sdmcArchive);
-		void remove(); // Removes the currently opened file
+		u64  copy(const std::u16string& dst, std::function<void (const std::u16string& file, u32 percent)> callback=nullptr, FS_archive& dstArchive=sdmcArchive);
+		void del(); // Delete the currently opened file
 
 		// Don't use setFileHandle() for normal files! Only for AM file handles or similar.
 		Handle getFileHandle() {return _fileHandle_;}
 		void   setFileHandle(Handle fileHandle) {_fileHandle_ = fileHandle; _offset_ = 0;}
 	};
 
+
+	// Other file functions
+	bool fileExist(const std::u16string& path, FS_archive& archive=sdmcArchive);
+	void moveFile(const std::u16string& src, const std::u16string& dst, FS_archive& srcArchive=sdmcArchive, FS_archive& dstArchive=sdmcArchive);
+	u64  copyFile(const std::u16string& src, const std::u16string& dst, std::function<void (const std::u16string& file, u32 percent)> callback=nullptr, FS_archive& srcArchive=sdmcArchive, FS_archive& dstArchive=sdmcArchive);
+	void deleteFile(const std::u16string& path, FS_archive& archive=sdmcArchive);
+
+
+	struct DirInfo
+	{
+		u32 fileCount;
+		u32 dirCount;
+		u64 size; // Total size of the directory
+	};
 
 	struct DirEntry
 	{
@@ -106,14 +125,23 @@ namespace fs
 
 
 	// Directory functions
+	bool dirExist(const std::u16string& path, FS_archive& archive=sdmcArchive);
 	void makeDir(const std::u16string& path, FS_archive& archive=sdmcArchive);
 	void makePath(const std::u16string& path, FS_archive& archive=sdmcArchive);
-	std::vector<DirEntry> listDirContents(const std::u16string& path, FS_archive& archive=sdmcArchive);
-	void copyDir(const std::u16string& src, const std::u16string& dst, FS_archive& srcArchive=sdmcArchive, FS_archive& dstArchive=sdmcArchive);
-	void removeDir(const std::u16string& path, FS_archive& archive=sdmcArchive);
+	DirInfo getDirInfo(const std::u16string& path, FS_archive& archive=sdmcArchive);
+	std::vector<DirEntry> listDirContents(const std::u16string& path, const std::u16string filter=u"", FS_archive& archive=sdmcArchive);
+	void moveDir(const std::u16string& src, const std::u16string& dst, FS_archive& srcArchive=sdmcArchive, FS_archive& dstArchive=sdmcArchive);
+	void copyDir(const std::u16string& src, const std::u16string& dst, std::function<void (const std::u16string& fsObject, u32 totalPercent, u32 filePercent)> callback=nullptr, FS_archive& srcArchive=sdmcArchive, FS_archive& dstArchive=sdmcArchive);
+	void deleteDir(const std::u16string& path, FS_archive& archive=sdmcArchive);
 
 
-	// snipped zip functions
+	// Zip functions
+	void copyFileToZip(const std::u16string& src, const std::string& zipPath, zipFile& zip, std::function<void (const std::u16string& file, u32 percent)> callback=nullptr, FS_archive& srcArchive=sdmcArchive);
+	void makeDirInZip(const std::string& zipPath, zipFile& zip);
+	void zipDir(const std::u16string& src, const std::u16string& zipDst, std::function<void (const std::u16string& fsObject, u32 totalPercent, u32 filePercent)> callback=nullptr, FS_archive& srcArchive=sdmcArchive);
+	void unzipToDir(const std::u16string& zipSrc, const std::u16string& dst, std::function<void (const std::u16string& fsObject, u32 totalPercent, u32 filePercent)> callback=nullptr, FS_archive& dstArchive=sdmcArchive);
+	void addToZipPath(std::string& path, const std::u16string& dirOrFile, bool isDir);
+	void removeFromZipPath(std::string& path);
 
 
 	// Misc functions
@@ -122,6 +150,7 @@ namespace fs
 } // namespace fs
 
 
+Result FSUSER_ControlArchive(Handle *handle, FS_archive *archive);
 void sdmcArchiveInit();
 void sdmcArchiveExit();
 

@@ -32,10 +32,16 @@
 std::vector<TitleInfo> getTitleInfos(mediatypes_enum mediaType)
 {
 	char tmpStr[16];
-	u32 count;
+	extern u8 sysLang; // We got this in main.c
+	u32 count, bytesRead;
 	Result res;
+	Handle fileHandle;
 	TitleInfo tmpTitleInfo;
 
+	u32 archiveLowPath[4] = {0, 0, mediaType, 0};
+	const FS_archive iconArchive = {0x2345678A, {PATH_BINARY, 0x10, (u8*)archiveLowPath}};
+	const u32 fileLowPath[5] = {0, 0, 2, 0x6E6F6369, 0};
+	const FS_path filePath = {PATH_BINARY, 0x14, (const u8*)fileLowPath};
 
 
 	if((res = AM_GetTitleCount(mediaType, &count))) throw titleException(_FILE_, __LINE__, res, "Failed to get title count!");
@@ -44,6 +50,7 @@ std::vector<TitleInfo> getTitleInfos(mediatypes_enum mediaType)
 	std::vector<TitleInfo> titleInfos; titleInfos.reserve(count);
 	Buffer<u64> titleIdList(count, false);
 	Buffer<TitleList> titleList(count, false);
+	Buffer<Icon> icon(1, false);
 
 
 
@@ -56,6 +63,21 @@ std::vector<TitleInfo> getTitleInfos(mediatypes_enum mediaType)
 		if(AM_GetTitleProductCode(mediaType, titleIdList[i], tmpStr)) memset(tmpStr, 0, 16);
 		tmpTitleInfo.productCode = tmpStr;
 
+		// Copy the title ID into our archive low path
+		memcpy(archiveLowPath, &titleIdList[i], 8);
+		icon.clear();
+		if(!FSUSER_OpenFileDirectly(nullptr, &fileHandle, iconArchive, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE))
+		{
+			// Nintendo decided to release a title with an icon entry but with size 0 so this will fail.
+			// Ignoring errors because of this here.
+			FSFILE_Read(fileHandle, &bytesRead, 0, &icon, sizeof(Icon));
+			FSFILE_Close(fileHandle);
+		}
+
+		tmpTitleInfo.title = icon[0].appTitles[sysLang].longDesc;
+		tmpTitleInfo.publisher = icon[0].appTitles[sysLang].publisher;
+		memcpy(tmpTitleInfo.icon, icon[0].icon48, 0x1200);
+
 		titleInfos.push_back(tmpTitleInfo);
 	}
 
@@ -63,7 +85,7 @@ std::vector<TitleInfo> getTitleInfos(mediatypes_enum mediaType)
 }
 
 
-void installCia(mediatypes_enum mediaType, const std::u16string& path)
+void installCia(const std::u16string& path, mediatypes_enum mediaType, std::function<void (const std::u16string& file, u32 percent)> callback)
 {
 	fs::File ciaFile(path, FS_OPEN_READ), cia;
 	Buffer<u8> buffer(MAX_BUF_SIZE, false);
@@ -97,6 +119,7 @@ void installCia(mediatypes_enum mediaType, const std::u16string& path)
 			}
 
 			offset += blockSize;
+			if(callback) callback(path, offset * 100 / ciaSize);
 		}
 	}
 

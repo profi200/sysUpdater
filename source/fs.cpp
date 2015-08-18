@@ -18,12 +18,15 @@
 
 
 #include <algorithm>
+#include <functional>
 #include <string>
 #include <vector>
 #include <ctime>
 #include <3ds.h>
 #include "fs.h"
 #include "misc.h"
+#include "zip.h"
+#include "unzip.h"
 
 #define _FILE_ "fs.cpp" // Replacement for __FILE__ without the path
 
@@ -34,6 +37,17 @@ FS_archive sdmcArchive;
 
 namespace fs
 {
+	// Simple std::sort() compar function for file names
+	bool fileNameCmp(fs::DirEntry& first, fs::DirEntry& second)
+	{
+		if(first.isDir && (!second.isDir)) return true;
+		else if((!first.isDir) && second.isDir) return false;
+
+
+		return (first.name.compare(second.name)<0);
+	}
+
+
 	//===============================================
 	// class File                                  ||
 	//===============================================
@@ -52,8 +66,26 @@ namespace fs
 
 		close(); // Close file handle before we open a new one
 		seek(0, FS_SEEK_SET); // Reset current offset
-		if((res = FSUSER_OpenFile(nullptr, &_fileHandle_, archive, filePath, openFlags, FS_ATTRIBUTE_NONE)))
-			throw fsException(_FILE_, __LINE__, res, "Failed to open file!");
+		if(FSUSER_OpenFile(nullptr, &_fileHandle_, archive, filePath, openFlags & 3, FS_ATTRIBUTE_NONE))
+		{
+			if((res = FSUSER_OpenFile(nullptr, &_fileHandle_, archive, filePath, openFlags, FS_ATTRIBUTE_NONE)))
+				throw fsException(_FILE_, __LINE__, res, "Failed to open file!");
+		}
+	}
+
+
+	void File::open(const FS_path& lowPath, u32 openFlags, FS_archive& archive)
+	{
+		Result  res;
+
+
+		close(); // Close file handle before we open a new one
+		seek(0, FS_SEEK_SET); // Reset current offset
+		if(FSUSER_OpenFile(nullptr, &_fileHandle_, archive, lowPath, openFlags & 3, FS_ATTRIBUTE_NONE))
+		{
+			if((res = FSUSER_OpenFile(nullptr, &_fileHandle_, archive, lowPath, openFlags, FS_ATTRIBUTE_NONE)))
+				throw fsException(_FILE_, __LINE__, res, "Failed to open file!");
+		}
 	}
 
 
@@ -86,6 +118,17 @@ namespace fs
 
 		_offset_ += bytesWritten;
 		return bytesWritten;
+	}
+
+
+	void File::flush()
+	{
+		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
+
+    Result res;
+
+
+		if((res = FSFILE_Flush(_fileHandle_))) throw fsException(_FILE_, __LINE__, res, "Failed to flush file!");
 	}
 
 
@@ -135,30 +178,75 @@ namespace fs
 	{
 		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
 
-		FS_path srcPath = {PATH_WCHAR, (_path_.length()*2)+2, (const u8*)_path_.c_str()};
+		u64 tmp = tell();
+
+
+		close(); // Close file handle before we open a new one
+		moveFile(_path_, dst, *_archive_, dstArchive);
+		open(dst, _openFlags_ & 3, dstArchive); // Open moved file
+		seek(tmp, FS_SEEK_SET);
+	}
+
+
+	u64 File::copy(const std::u16string& dst, std::function<void (const std::u16string& file, u32 percent)> statusCallback, FS_archive& dstArchive)
+	{
+		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
+
+		return copyFile(_path_, dst, statusCallback, *_archive_, dstArchive);
+	}
+
+
+	void File::del()
+	{
+		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
+
+		close(); // Close file handle before we can delete this file
+		deleteFile(_path_, *_archive_);
+	}
+
+
+	//===============================================
+	// Other file functions                        ||
+	//===============================================
+
+	bool fileExist(const std::u16string& path, FS_archive& archive)
+	{
+		FS_path filePath = {PATH_WCHAR, (path.length()*2)+2, (const u8*)path.c_str()};
+		Handle fileHandle;
+		Result res;
+
+
+		if(!FSUSER_OpenFile(nullptr, &fileHandle, archive, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE))
+		{
+			if((res = FSFILE_Close(fileHandle))) throw fsException(_FILE_, __LINE__, res, "Failed to close file!");
+			return true;
+		}
+
+		return false;
+	}
+
+
+	void moveFile(const std::u16string& src, const std::u16string& dst, FS_archive& srcArchive, FS_archive& dstArchive)
+	{
+		FS_path srcPath = {PATH_WCHAR, (src.length()*2)+2, (const u8*)src.c_str()};
 		FS_path dstPath = {PATH_WCHAR, (dst.length()*2)+2, (const u8*)dst.c_str()};
 		Result res;
 
 
-		close(); // Close file handle before we open a new one
-		if((res = FSUSER_RenameFile(nullptr, *_archive_, srcPath, dstArchive, dstPath)))
+		if((res = FSUSER_RenameFile(nullptr, srcArchive, srcPath, dstArchive, dstPath)))
 			throw fsException(_FILE_, __LINE__, res, "Failed to move file!");
-		open(dst, _openFlags_ & 3, dstArchive); // Open moved file
 	}
 
 
-	void File::copy(const std::u16string& dst, FS_archive& dstArchive)
+	u64 copyFile(const std::u16string& src, const std::u16string& dst, std::function<void (const std::u16string& file, u32 percent)> callback, FS_archive& srcArchive, FS_archive& dstArchive)
 	{
-		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
-
-		File outFile(dst, FS_OPEN_WRITE|FS_OPEN_CREATE, dstArchive);
+		File inFile(src, FS_OPEN_READ, srcArchive), outFile(dst, FS_OPEN_WRITE|FS_OPEN_CREATE, dstArchive);
 		u32 blockSize;
 		u64 inFileSize, offset = 0;
 
 
 
-		seek(0, FS_SEEK_SET);
-		inFileSize = size();
+		inFileSize = inFile.size();
 		outFile.setSize(inFileSize);
 
 
@@ -171,40 +259,48 @@ namespace fs
 
 			if(blockSize>0)
 			{
-				read(&buffer, blockSize);
+				inFile.read(&buffer, blockSize);
 				outFile.write(&buffer, blockSize);
 
 				offset += blockSize;
+				if(callback) callback(src, offset * 100 / inFileSize);
 			}
 		}
+
+		return offset;
 	}
 
 
-	void File::remove(const std::u16string& path, FS_archive& archive)
+	void deleteFile(const std::u16string& path, FS_archive& archive)
 	{
-		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
-
-		FS_path lowPath = {PATH_WCHAR, (path.length()*2)+2, (const u8*)path.c_str()};
+		FS_path srcPath = {PATH_WCHAR, (path.length()*2)+2, (const u8*)path.c_str()};
 		Result res;
 
 
-		if((res = FSUSER_DeleteFile(nullptr, archive, lowPath))) throw fsException(_FILE_, __LINE__, res, "Failed to remove file!");
+		if((res = FSUSER_DeleteFile(nullptr, archive, srcPath))) throw fsException(_FILE_, __LINE__, res, "Failed to delete file!");
 	}
-
-
-	void File::remove()
-	{
-		if(!_fileHandle_) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "No file opened!");
-
-		close(); // Close file handle before we can delete this file
-		remove(_path_, *_archive_);
-	}
-
 
 
 	//===============================================
 	// Directory related functions                 ||
 	//===============================================
+
+	bool dirExist(const std::u16string& path, FS_archive& archive)
+	{
+		FS_path dirPath = {PATH_WCHAR, (path.length()*2)+2, (const u8*)path.c_str()};
+		Handle dirHandle;
+		Result res;
+
+
+		if(!FSUSER_OpenDirectory(nullptr, &dirHandle, archive, dirPath))
+		{
+			if((res = FSDIR_Close(dirHandle))) throw fsException(_FILE_, __LINE__, res, "Failed to close directory!");
+			return true;
+		}
+
+		return false;
+	}
+
 
 	void makeDir(const std::u16string& path, FS_archive& archive)
 	{
@@ -229,7 +325,7 @@ namespace fs
 		size_t found = 0;
 
 
-		if(path.length() < 2) return;
+		if(path.length() < 2 || path.find_first_of(u"/") == std::u16string::npos) return;
 		while(found != std::u16string::npos)
 		{
 			found = path.find_first_of(u"/", found+1);
@@ -239,14 +335,66 @@ namespace fs
 	}
 
 
-	std::vector<DirEntry> listDirContents(const std::u16string& path, FS_archive& archive)
+	DirInfo getDirInfo(const std::u16string& path, FS_archive& archive)
 	{
+		u32 depth = 0;
+		u16 helper[128]; // Anyone uses higher dir depths?
+		DirInfo dirInfo = {0};
+
+		std::u16string tmpPath(path);
+
+
+
+		std::vector<DirEntry> entries = listDirContents(tmpPath, u"", archive);
+		helper[0] = 0; // We are in the root at file/folder 0
+
+
+		while(1)
+		{
+			// Prevent non-existent member access
+			if((helper[depth]>=entries.size()) ? 0 : entries[helper[depth]].isDir)
+			{
+				addToPath(tmpPath, entries[helper[depth]].name);
+				dirInfo.dirCount++;
+
+				helper[++depth] = 0; // Go 1 up in the fs tree and reset position
+				entries = listDirContents(tmpPath, u"", archive);
+			}
+
+			if((helper[depth]>=entries.size()) ? 0 : entries[helper[depth]].isDir) continue;
+
+			for(auto it : entries)
+			{
+				if(!it.isDir)
+				{
+					dirInfo.fileCount++;
+					dirInfo.size += it.size;
+				}
+			}
+
+			if(!depth) break;
+
+			removeFromPath(tmpPath);
+
+			helper[--depth]++; // Go 1 down in the fs tree and increase position
+			entries = listDirContents(tmpPath, u"", archive);
+		}
+
+		return dirInfo;
+	}
+
+
+	// Filter format is "entry1;entry2;..." for example ".txt;.png;". "" means list everything
+	std::vector<DirEntry> listDirContents(const std::u16string& path, const std::u16string filter, FS_archive& archive)
+	{
+		bool useFilter = false;
 		Handle dirHandle;
-		Result res;
 		u32 entriesRead;
+		Result res;
 
 		FS_path dirPath = {PATH_WCHAR, (path.length()*2)+2, (const u8*)path.c_str()};
 		std::vector<DirEntry> filesFolders;
+		if(filter.length() > 0) useFilter = true;
 
 
 
@@ -263,9 +411,38 @@ namespace fs
 			filesFolders.reserve(filesFolders.size()+32); // Save time by reserving enough mem
 			if((res = FSDIR_Read(dirHandle, &entriesRead, 32, &entries))) throw fsException(_FILE_, __LINE__, res, "Failed to read directory!");
 
-			for(u32 i=0; i<entriesRead; i++)
+			if(useFilter)
 			{
-				filesFolders.push_back(DirEntry((char16_t*)entries[i].name, entries[i].isDirectory, entries[i].fileSize));
+				for(u32 i=0; i<entriesRead; i++)
+				{
+					if(!entries[i].isDirectory)
+					{
+						size_t foundOld = 0;
+						size_t found = 0;
+						const std::u16string file((char16_t*)entries[i].name);
+
+						while(1)
+						{
+							found = filter.find_first_of(u";", found+1);
+							if(found == std::u16string::npos) break;
+							if(foundOld > 0) foundOld++; // Skip the separator
+							if(file.length() < found-foundOld) continue;
+              if(file.compare(file.length()-(found-foundOld), found-foundOld, filter, foundOld, found-foundOld) == 0) filesFolders.push_back(DirEntry((char16_t*)entries[i].name, entries[i].isDirectory, entries[i].fileSize));
+							foundOld = found;
+						}
+					}
+					else
+					{
+						filesFolders.push_back(DirEntry((char16_t*)entries[i].name, entries[i].isDirectory, entries[i].fileSize));
+					}
+				}
+			}
+			else
+			{
+				for(u32 i=0; i<entriesRead; i++)
+				{
+					filesFolders.push_back(DirEntry((char16_t*)entries[i].name, entries[i].isDirectory, entries[i].fileSize));
+				}
 			}
 		} while(entriesRead == 32);
 
@@ -285,12 +462,23 @@ namespace fs
 	}
 
 
-	void copyDir(const std::u16string& src, const std::u16string& dst, FS_archive& srcArchive, FS_archive& dstArchive)
+	void moveDir(const std::u16string& src, const std::u16string& dst, FS_archive& srcArchive, FS_archive& dstArchive)
 	{
-		u32 depth = 0;
-		u16 helper[128]; // Anyone uses higher dir depths?
-		File f;
+		FS_path srcPath = {PATH_WCHAR, (src.length()*2)+2, (const u8*)src.c_str()};
+		FS_path dstPath = {PATH_WCHAR, (dst.length()*2)+2, (const u8*)dst.c_str()};
+		Result res;
 
+
+		if((res = FSUSER_RenameDirectory(nullptr, srcArchive, srcPath, dstArchive, dstPath))) throw fsException(_FILE_, __LINE__, res, "Failed to move directory!");
+	}
+
+
+	void copyDir(const std::u16string& src, const std::u16string& dst, std::function<void (const std::u16string& fsObject, u32 totalPercent, u32 filePercent)> callback, FS_archive& srcArchive, FS_archive& dstArchive)
+	{
+		u32 depth = 0, fileCount = 0, dirCount = 0;
+		u16 helper[128]; // Anyone uses higher dir depths?
+
+		DirInfo inDirInfo = getDirInfo(src, srcArchive);
 		std::u16string tmpInPath(src);
 		std::u16string tmpOutPath(dst);
 
@@ -298,7 +486,7 @@ namespace fs
 
 		// Create the specified path if it doesn't exist
 		makePath(tmpOutPath, dstArchive);
-		std::vector<DirEntry> entries = listDirContents(tmpInPath, srcArchive);
+		std::vector<DirEntry> entries = listDirContents(tmpInPath, u"", srcArchive);
 		helper[0] = 0; // We are in the root at file/folder 0
 
 
@@ -309,10 +497,12 @@ namespace fs
 			{
 				addToPath(tmpInPath, entries[helper[depth]].name);
 				addToPath(tmpOutPath, entries[helper[depth]].name);
+				if(callback) callback(tmpInPath, (fileCount + dirCount) * 100 / (inDirInfo.fileCount + inDirInfo.dirCount), 0);
 				makeDir(tmpOutPath, dstArchive);
+				dirCount++;
 
 				helper[++depth] = 0; // Go 1 up in the fs tree and reset position
-				entries = listDirContents(tmpInPath, srcArchive);
+				entries = listDirContents(tmpInPath, u"", srcArchive);
 			}
 
 			if((helper[depth]>=entries.size()) ? 0 : entries[helper[depth]].isDir) continue;
@@ -323,8 +513,12 @@ namespace fs
 				{
 					addToPath(tmpInPath, it.name);
 					addToPath(tmpOutPath, it.name);
-					f.open(tmpInPath, FS_OPEN_READ, srcArchive);
-					f.copy(tmpOutPath, dstArchive);
+					if(callback) copyFile(tmpInPath, tmpOutPath, [&](const std::u16string& file, u32 percent)
+																												{
+																													callback(file, (fileCount + dirCount) * 100 / (inDirInfo.fileCount + inDirInfo.dirCount), percent);
+																												}, srcArchive, dstArchive);
+					else copyFile(tmpInPath, tmpOutPath, nullptr, srcArchive, dstArchive);
+					fileCount++;
 					removeFromPath(tmpInPath);
 					removeFromPath(tmpOutPath);
 				}
@@ -336,19 +530,34 @@ namespace fs
 			removeFromPath(tmpOutPath);
 
 			helper[--depth]++; // Go 1 down in the fs tree and increase position
-			entries = listDirContents(tmpInPath, srcArchive);
+			entries = listDirContents(tmpInPath, u"", srcArchive);
 		}
+
+		if(callback) callback(tmpInPath, (fileCount + dirCount) * 100 / (inDirInfo.fileCount + inDirInfo.dirCount), 0);
 	}
 
 
-	void removeDir(const std::u16string& path, FS_archive& archive)
+	void deleteDir(const std::u16string& path, FS_archive& archive)
 	{
 		FS_path dirPath = {PATH_WCHAR, (path.length()*2)+2, (const u8*)path.c_str()};
 		Result res;
 
 
-		if((res = FSUSER_DeleteDirectoryRecursively(nullptr, archive, dirPath)))
-			throw fsException(_FILE_, __LINE__, res, "Failed to remove directory!");
+		if(path.compare(u"/") != 0)
+		{
+			if((res = FSUSER_DeleteDirectoryRecursively(nullptr, archive, dirPath)))
+				throw fsException(_FILE_, __LINE__, res, "Failed to delete directory!");
+		}
+		else // We can't delete "/" itself so delete everything in root
+		{
+			std::vector<DirEntry> list = listDirContents(path, u"", archive);
+
+			for(auto it : list)
+			{
+				if(it.isDir) deleteDir(u"/" + it.name, archive);
+				else deleteFile(u"/" + it.name, archive);
+			}
+		}
 	}
 
 
@@ -356,8 +565,245 @@ namespace fs
 	// Zip related functions                       ||
 	//===============================================
 
+	void copyFileToZip(const std::u16string& src, const std::string& zipPath, zipFile& zip, std::function<void (const std::u16string& file, u32 percent)> callback, FS_archive& srcArchive)
+	{
+		File inFile(src, FS_OPEN_READ, srcArchive);
+		u64 inFileSize, offset = 0;
+		u32 blockSize;
+		Result res;
+		time_t rawtime;
+		struct tm *time_;
+		zip_fileinfo fileInfo = {0};
 
-	// snipped zip functions
+
+
+		inFileSize = inFile.size();
+
+		time(&rawtime);
+		time_ = localtime(&rawtime);
+		memcpy(&fileInfo.tmz_date, time_, 24); // Copy s, m, h, d and y directly
+
+
+		Buffer<u8> buffer(MAX_BUF_SIZE, false);
+		if((res = zipOpenNewFileInZip4(zip, zipPath.c_str(), &fileInfo, nullptr, 0, nullptr, 0, nullptr, Z_DEFLATED, Z_DEFAULT_COMPRESSION,
+													0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, nullptr, 0, 0, 0x800 /* UTF-8 flag */)) != ZIP_OK)
+													throw fsException(_FILE_, __LINE__, res, "Failed to create file in ZIP!");
+
+
+		for(u32 i=0; i<=inFileSize / MAX_BUF_SIZE; i++)
+		{
+			blockSize = ((inFileSize - offset<MAX_BUF_SIZE) ? inFileSize - offset : MAX_BUF_SIZE);
+
+			if(blockSize>0)
+			{
+				inFile.read(&buffer, blockSize);
+				if((res = zipWriteInFileInZip(zip, &buffer, blockSize)) != ZIP_OK) throw fsException(_FILE_, __LINE__, res, "Failed to write in file in ZIP!");
+
+				offset += blockSize;
+				if(callback) callback(src, offset * 100 / inFileSize);
+			}
+		}
+
+		if((res = zipCloseFileInZip(zip)) != ZIP_OK) throw fsException(_FILE_, __LINE__, res, "Failed to close file in ZIP!");
+	}
+
+
+	void makeDirInZip(const std::string& zipPath, zipFile& zip)
+	{
+		Result res;
+		time_t rawtime;
+		struct tm *time_;
+		zip_fileinfo fileInfo = {0}; fileInfo.external_fa = 0x10; // Directory flag
+
+
+
+		time(&rawtime);
+		time_ = localtime(&rawtime);
+		memcpy(&fileInfo.tmz_date, time_, 24); // Copy s, m, h, d and y directly
+
+		// That's the only way to make dirs? Wtf.
+		if((res = zipOpenNewFileInZip4(zip, zipPath.c_str(), &fileInfo, nullptr, 0, nullptr, 0, nullptr, Z_BINARY, Z_NO_COMPRESSION,
+													0, 0, 0, 0, nullptr, 0, 0, 0x800 /* UTF-8 flag */)) != ZIP_OK)
+													throw fsException(_FILE_, __LINE__, res, "Failed to create directory in ZIP!");
+
+		if((res = zipCloseFileInZip(zip)) != ZIP_OK) throw fsException(_FILE_, __LINE__, res, "Failed to close directory in ZIP!");
+	}
+
+
+	void zipDir(const std::u16string& src, const std::u16string& zipDst, std::function<void (const std::u16string& fsObject, u32 totalPercent, u32 filePercent)> callback, FS_archive& srcArchive)
+	{
+		u32 depth = 0, fileCount = 0, dirCount = 0;
+		u16 helper[128]; // Anyone uses higher dir depths?
+		Result res;
+
+		DirInfo inDirInfo = getDirInfo(src, srcArchive);
+		std::u16string tmpInPath(src);
+		std::string zipPath; // Zip internal path starts without a slash
+
+
+
+		// Create new zip file deleting existing ones without a warning!
+		if(fileExist(zipDst)) deleteFile(zipDst);
+		zipFile zip = zipOpen2(zipDst.c_str(), APPEND_STATUS_CREATE, nullptr, nullptr);
+		if(!zip) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "Failed to create ZIP file!");
+
+		std::vector<DirEntry> entries = listDirContents(tmpInPath, u"", srcArchive);
+		helper[0] = 0; // We are in the root at file/folder 0
+
+
+		while(1)
+		{
+			// Prevent non-existent member access
+			if((helper[depth]>=entries.size()) ? 0 : entries[helper[depth]].isDir)
+			{
+				addToPath(tmpInPath, entries[helper[depth]].name);
+				addToZipPath(zipPath, entries[helper[depth]].name, true);
+				if(callback) callback(tmpInPath, (fileCount + dirCount) * 100 / (inDirInfo.fileCount + inDirInfo.dirCount), 0);
+				makeDirInZip(zipPath, zip);
+				dirCount++;
+
+				helper[++depth] = 0; // Go 1 up in the fs tree and reset position
+				entries = listDirContents(tmpInPath, u"", srcArchive);
+			}
+
+			if((helper[depth]>=entries.size()) ? 0 : entries[helper[depth]].isDir) continue;
+
+			for(auto it : entries)
+			{
+				if(!it.isDir)
+				{
+					addToPath(tmpInPath, it.name);
+					addToZipPath(zipPath, it.name, false);
+					if(callback) copyFileToZip(tmpInPath, zipPath, zip, [&](const std::u16string& file, u32 percent)
+																															{
+																																callback(file, (fileCount + dirCount) * 100 / (inDirInfo.fileCount + inDirInfo.dirCount), percent);
+																															}, srcArchive);
+					else copyFileToZip(tmpInPath, zipPath, zip, nullptr, srcArchive);
+					fileCount++;
+					removeFromPath(tmpInPath);
+					removeFromZipPath(zipPath);
+				}
+			}
+
+			if(!depth) break;
+
+			removeFromPath(tmpInPath);
+			removeFromZipPath(zipPath);
+
+			helper[--depth]++; // Go 1 down in the fs tree and increase position
+			entries = listDirContents(tmpInPath, u"", srcArchive);
+		}
+
+		if((res = zipClose(zip, nullptr)) != ZIP_OK) throw fsException(_FILE_, __LINE__, res, "Failed to close ZIP file!");
+		if(callback) callback(tmpInPath, (fileCount + dirCount) * 100 / (inDirInfo.fileCount + inDirInfo.dirCount), 0);
+	}
+
+
+	void unzipToDir(const std::u16string& zipSrc, const std::u16string& dst, std::function<void (const std::u16string& fsObject, u32 totalPercent, u32 filePercent)> callback, FS_archive& dstArchive)
+	{
+		u32 fileCount = 0, dirCount = 0;
+		Buffer<char> zipFilePath(256, false);
+		Buffer<char16_t> tmpOutPath(256, false);
+		Buffer<u8> buf(MAX_BUF_SIZE, false);
+		std::u16string tmpDst;
+		unz_file_info fInfo;
+		unz_global_info globalInfo;
+		Result res;
+		File outFile;
+		int bytesRead;
+		u64 offset = 0;
+
+
+
+		if(dst.length() > 1) tmpDst = dst;
+
+		makePath(tmpDst, dstArchive);
+		unzFile zip = unzOpen2(zipSrc.c_str(), nullptr);
+		if(!zip) throw fsException(_FILE_, __LINE__, 0xDEADBEEF, "Failed to open ZIP file!");
+		if((res = unzGetGlobalInfo(zip, &globalInfo)) != UNZ_OK) throw fsException(_FILE_, __LINE__, res, "Failed to get global info from ZIP!");
+		if(!globalInfo.number_entry)
+		{
+			if((res = unzClose(zip)) != UNZ_OK) throw fsException(_FILE_, __LINE__, res, "Failed to close ZIP file!");
+			return;
+		}
+		if((res = unzGoToFirstFile(zip)) != UNZ_OK) throw fsException(_FILE_, __LINE__, res, "Failed to go to first file in ZIP!");
+
+
+		do
+		{
+			zipFilePath.clear(); zipFilePath[0] = '/';
+			if((res = unzGetCurrentFileInfo(zip, &fInfo, &zipFilePath[1], 254, nullptr, 0, nullptr, 0)) != UNZ_OK)
+				throw fsException(_FILE_, __LINE__, res, "Failed to get current file info (ZIP)!");
+
+			// 0 = none, 8 = deflate
+			if(fInfo.compression_method != 0 && fInfo.compression_method != 8)
+			{
+				if((res = unzClose(zip)) != UNZ_OK) throw fsException(_FILE_, __LINE__, res, "Failed to close ZIP file!");
+				throw fsException(_FILE_, __LINE__, fInfo.compression_method, "Unsupported compression method. Use deflate!");
+			}
+			else
+			{
+        tmpOutPath.clear();
+        if(fInfo.external_fa & 0x10) zipFilePath[strlen(&zipFilePath)-1] = 0; // Remove slash from path
+        utf8_to_utf16((u16*)&tmpOutPath, (u8*)&zipFilePath, 255);
+
+				if(fInfo.external_fa & 0x10)
+				{
+					if(callback) callback(&tmpOutPath, (fileCount + dirCount) * 100 / globalInfo.number_entry, 0);
+					makePath(tmpDst + &tmpOutPath, dstArchive);
+					dirCount++;
+				}
+				else
+				{
+					if((res = unzOpenCurrentFile(zip)) != UNZ_OK) throw fsException(_FILE_, __LINE__, res, "Failed to open file in ZIP!");
+					outFile.open(tmpDst + &tmpOutPath, FS_OPEN_WRITE|FS_OPEN_CREATE, dstArchive);
+					outFile.setSize(fInfo.uncompressed_size);
+
+					while((bytesRead = unzReadCurrentFile(zip, &buf, MAX_BUF_SIZE)) > 0)
+					{
+						outFile.write(&buf, bytesRead);
+						offset += bytesRead;
+						if(callback) callback(&tmpOutPath, (fileCount + dirCount) * 100 / globalInfo.number_entry, offset * 100 / fInfo.uncompressed_size);
+					}
+					if(bytesRead < 0) throw fsException(_FILE_, __LINE__, bytesRead, "Failed to read file in ZIP!");
+
+					if((res = unzCloseCurrentFile(zip)) != UNZ_OK) throw fsException(_FILE_, __LINE__, res, "Failed to close file in ZIP!");
+					offset = 0; fileCount++;
+				}
+			}
+		} while(unzGoToNextFile(zip) == UNZ_OK);
+
+		if((res = unzClose(zip)) != UNZ_OK) throw fsException(_FILE_, __LINE__, res, "Failed to close ZIP file!");
+		if(callback) callback(&tmpOutPath, (fileCount + dirCount) * 100 / globalInfo.number_entry, 0);
+	}
+
+
+	void addToZipPath(std::string& path, const std::u16string& dirOrFile, bool isDir)
+	{
+		Buffer<char> tmp(1025);
+		utf16_to_utf8((u8*)&tmp, (const u16*)dirOrFile.c_str(), 1024);
+
+		path += &tmp;
+		if(isDir) path += "/";
+	}
+
+
+	void removeFromZipPath(std::string& path)
+	{
+		size_t found = path.find_last_of("/");
+
+		if(found == std::string::npos) path.erase(); // someFile.bin
+		else
+		{
+			if(found+1<path.length()) path.erase(found+1); // someDir/someFile.bin
+			else
+			{
+				found = path.find_last_of("/", found-1);
+				if(found == std::string::npos) path.erase(); // someDir/
+				else path.erase(found+1); // someDir/someDir/
+			}
+		}
+	}
 
 
 	//===============================================
@@ -379,6 +825,42 @@ namespace fs
 		else path.erase(lastSlash+1);
 	}
 } // namespace fs
+
+
+// Currently unused code. May be useful later
+Result FSUSER_ControlArchive(Handle *handle, FS_archive *archive)
+{
+	if(!archive)
+		return -2;
+
+	extern Handle fsuHandle;
+
+	if(!handle)
+		handle = &fsuHandle;
+
+	u32 b1, b2;
+	((u8*)&b1)[0] = 0x4E;
+	((u8*)&b2)[0] = 0xE4;
+
+	u32 *cmdbuf = getThreadCommandBuffer();
+
+	cmdbuf[0] = 0x080D0144;
+	cmdbuf[1] = archive->handleLow;
+	cmdbuf[2] = archive->handleHigh;
+	cmdbuf[3] = 0;
+	cmdbuf[4] = 1;
+	cmdbuf[5] = 1;
+	cmdbuf[6] = 0x1A;
+	cmdbuf[7] = (u32)&b1;
+	cmdbuf[8] = 0x1C;
+	cmdbuf[9] = (u32)&b2;
+
+	Result ret = 0;
+	if((ret = svcSendSyncRequest(*handle)))
+		return ret;
+
+	return cmdbuf[1];
+}
 
 
 void sdmcArchiveInit()

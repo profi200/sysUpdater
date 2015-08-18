@@ -39,7 +39,7 @@ public:
 		snprintf(errStr, 255, "titleException:\n%s:%d: Result: 0x%X\n%s", file, line, (unsigned int)res, desc);
 	}
 
-	virtual const char* what() {return errStr;}
+	virtual const char* what() const noexcept {return errStr;}
 	const Result getErrCode() {return res;}
 };
 
@@ -47,9 +47,9 @@ public:
 
 struct TitleInfo
 {
-	//u16 icon[0x900];
-	//std::u16string title;
-	//std::u16string publisher;
+	u16 icon[0x900];
+	std::u16string title;
+	std::u16string publisher;
 	std::string productCode;
 	u64 titleID;
 	u64 size;
@@ -57,7 +57,7 @@ struct TitleInfo
 };
 
 
-/*struct Icon
+struct Icon
 {
 	u32 magic;
 	u16 version;
@@ -88,11 +88,11 @@ struct TitleInfo
 	u64 reserved2;
 	u16 icon24[0x240];
 	u16 icon48[0x900];
-};*/
+};
 
 
 std::vector<TitleInfo> getTitleInfos(mediatypes_enum mediaType);
-void installCia(mediatypes_enum mediaType, const std::u16string& path);
+void installCia(const std::u16string& path, mediatypes_enum mediaType, std::function<void (const std::u16string& file, u32 percent)> callback=nullptr);
 void deleteTitle(mediatypes_enum mediaType, u64 titleID);
 bool launchTitle(mediatypes_enum mediaType, u8 flags, u64 titleID); // On applet launch it returns false if the applet can't be lauched
 #define relaunchApp() launchTitle(mediatype_SDMC, 2, 0)
