@@ -39,7 +39,7 @@ extern "C"
 		srvInit();
 		aptInit();
 		gfxInit(GSP_RGB565_OES, GSP_RGB565_OES, false);
-		hidInit(NULL);
+		hidInit();
 		fsInit();
 		sdmcArchiveInit();
 		amInit();
