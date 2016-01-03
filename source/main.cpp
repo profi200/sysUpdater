@@ -108,7 +108,8 @@ void installUpdates(bool downgrade)
 				{
 					printf("NATIVE_FIRM         ");
 					installCia(u"/updates/" + it.name, MEDIATYPE_NAND);
-					if((res = AM_InstallNativeFirm())) throw titleException(_FILE_, __LINE__, res, "Failed to install NATIVE_FIRM!");
+					if(!downgrade) { if((res = AM_InstallNativeFirm())) throw titleException(_FILE_, __LINE__, res, "Failed to install NATIVE_FIRM!"); }
+					else { if((res = AM_InstallFirm(ciaFileInfo.titleID))) throw titleException(_FILE_, __LINE__, res, "Failed to install NATIVE_FIRM!"); }
 					printf("\x1b[32m  Installed\x1b[0m\n");
 				}
 				else remainingCias.push_back(it.name);
@@ -134,9 +135,8 @@ int main()
 	
 	bool once = false;
 
-
-
 	consoleInit(GFX_TOP, NULL);
+
 	printf("sysUpdater 0.4.2b by profi200\n\n\n");
 	printf("(A) update\n(Y) downgrade\n(B) exit\n\n");
 	printf("Use the HOME button if you run the CIA version.\n");
