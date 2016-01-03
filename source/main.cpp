@@ -82,11 +82,11 @@ int versionCmp(std::vector<TitleInfo>& installedTitles, u64& titleID, u16 versio
 void installUpdates(bool downgrade)
 {
 	std::vector<fs::DirEntry> filesDirs = fs::listDirContents(u"/updates", u".cia;"); // Filter for .cia files
-	std::vector<TitleInfo> installedTitles = getTitleInfos(mediatype_NAND);
+	std::vector<TitleInfo> installedTitles = getTitleInfos(MEDIATYPE_NAND);
 	std::vector<std::u16string> remainingCias;
 	Buffer<char> tmpStr(256);
 	Result res;
-	TitleList ciaFileInfo;
+	AM_TitleEntry ciaFileInfo;
 	fs::File f;
 
 
@@ -98,16 +98,16 @@ void installUpdates(bool downgrade)
 		if(!it.isDir)
 		{
 			f.open(u"/updates/" + it.name, FS_OPEN_READ);
-			if((res = AM_GetCiaFileInfo(mediatype_NAND, &ciaFileInfo, f.getFileHandle()))) throw titleException(_FILE_, __LINE__, res, "Failed to get CIA file info!");
+			if((res = AM_GetCiaFileInfo(MEDIATYPE_NAND, &ciaFileInfo, f.getFileHandle()))) throw titleException(_FILE_, __LINE__, res, "Failed to get CIA file info!");
 
-			int cmpResult = versionCmp(installedTitles, ciaFileInfo.titleID, ciaFileInfo.titleVersion);
+			int cmpResult = versionCmp(installedTitles, ciaFileInfo.titleID, ciaFileInfo.version);
 			if((downgrade && cmpResult != 0) || (cmpResult > 0))
 			{
-				if(cmpResult < 0) deleteTitle(mediatype_NAND, ciaFileInfo.titleID);
+				if(cmpResult < 0) deleteTitle(MEDIATYPE_NAND, ciaFileInfo.titleID);
 				if(ciaFileInfo.titleID == 0x0004013800000002LL || ciaFileInfo.titleID == 0x0004013820000002LL)
 				{
 					printf("NATIVE_FIRM         ");
-					installCia(u"/updates/" + it.name, mediatype_NAND);
+					installCia(u"/updates/" + it.name, MEDIATYPE_NAND);
 					if((res = AM_InstallNativeFirm())) throw titleException(_FILE_, __LINE__, res, "Failed to install NATIVE_FIRM!");
 					printf("\x1b[32m  Installed\x1b[0m\n");
 				}
@@ -123,7 +123,7 @@ void installUpdates(bool downgrade)
 		utf16_to_utf8((u8*)&tmpStr, (u16*)it.c_str(), 255);
 
 		printf("%s", &tmpStr);
-		installCia(u"/updates/" + it, mediatype_NAND);
+		installCia(u"/updates/" + it, MEDIATYPE_NAND);
 		printf("\x1b[32m  Installed\x1b[0m\n");
 	}
 }
@@ -131,6 +131,7 @@ void installUpdates(bool downgrade)
 
 int main()
 {
+	
 	bool once = false;
 
 
@@ -162,7 +163,7 @@ int main()
 					svcSleepThread(10000000000LL);
 
 					aptOpenSession();
-					APT_HardwareResetAsync(NULL);
+					APT_HardwareResetAsync();
 					aptCloseSession();
 					once = true;
 				}
@@ -187,5 +188,6 @@ int main()
 	}
 
 
+	
 	return 0;
 }
