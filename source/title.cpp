@@ -29,7 +29,7 @@
 
 
 
-std::vector<TitleInfo> getTitleInfos(mediatypes_enum mediaType)
+std::vector<TitleInfo> getTitleInfos(FS_MediaType mediaType)
 {
 	char tmpStr[16];
 	extern u8 sysLang; // We got this in main.c
@@ -39,9 +39,9 @@ std::vector<TitleInfo> getTitleInfos(mediatypes_enum mediaType)
 	TitleInfo tmpTitleInfo;
 
 	u32 archiveLowPath[4] = {0, 0, mediaType, 0};
-	const FS_archive iconArchive = {0x2345678A, {PATH_BINARY, 0x10, (u8*)archiveLowPath}};
+	const FS_Archive iconArchive = {0x2345678A, {PATH_BINARY, 0x10, (u8*)archiveLowPath}};
 	const u32 fileLowPath[5] = {0, 0, 2, 0x6E6F6369, 0};
-	const FS_path filePath = {PATH_BINARY, 0x14, (const u8*)fileLowPath};
+	const FS_Path filePath = {PATH_BINARY, 0x14, (const u8*)fileLowPath};
 
 
 	if((res = AM_GetTitleCount(mediaType, &count))) throw titleException(_FILE_, __LINE__, res, "Failed to get title count!");
@@ -49,7 +49,7 @@ std::vector<TitleInfo> getTitleInfos(mediatypes_enum mediaType)
 
 	std::vector<TitleInfo> titleInfos; titleInfos.reserve(count);
 	Buffer<u64> titleIdList(count, false);
-	Buffer<TitleList> titleList(count, false);
+	Buffer<AM_TitleEntry> titleList(count, false);
 	Buffer<Icon> icon(1, false);
 
 
@@ -66,7 +66,7 @@ std::vector<TitleInfo> getTitleInfos(mediatypes_enum mediaType)
 		// Copy the title ID into our archive low path
 		memcpy(archiveLowPath, &titleIdList[i], 8);
 		icon.clear();
-		if(!FSUSER_OpenFileDirectly(nullptr, &fileHandle, iconArchive, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE))
+		if(!FSUSER_OpenFileDirectly(&fileHandle, iconArchive, filePath, FS_OPEN_READ, 0))
 		{
 			// Nintendo decided to release a title with an icon entry but with size 0 so this will fail.
 			// Ignoring errors because of this here.
@@ -85,7 +85,7 @@ std::vector<TitleInfo> getTitleInfos(mediatypes_enum mediaType)
 }
 
 
-void installCia(const std::u16string& path, mediatypes_enum mediaType, std::function<void (const std::u16string& file, u32 percent)> callback)
+void installCia(const std::u16string& path, FS_MediaType mediaType, std::function<void (const std::u16string& file, u32 percent)> callback)
 {
 	fs::File ciaFile(path, FS_OPEN_READ), cia;
 	Buffer<u8> buffer(MAX_BUF_SIZE, false);
@@ -127,7 +127,7 @@ void installCia(const std::u16string& path, mediatypes_enum mediaType, std::func
 }
 
 
-void deleteTitle(mediatypes_enum mediaType, u64 titleID)
+void deleteTitle(FS_MediaType mediaType, u64 titleID)
 {
 	Result res;
 
@@ -140,7 +140,7 @@ void deleteTitle(mediatypes_enum mediaType, u64 titleID)
 
 // TODO: Find a way to translate the title ID to an appID without lookup tables (this looks ugly :|)
 //       Fix the weird freeze which sometimes happens at applet launch
-bool launchTitle(mediatypes_enum mediaType, u8 flags, u64 titleID)
+bool launchTitle(FS_MediaType mediaType, u8 flags, u64 titleID)
 {
 	Result res;
 	u8 isN3DS;
@@ -169,7 +169,7 @@ bool launchTitle(mediatypes_enum mediaType, u8 flags, u64 titleID)
 
 
 
-	APT_CheckNew3DS(nullptr, &isN3DS);
+	APT_CheckNew3DS(&isN3DS);
 	const u32 (*tIDTable)[3] = ((isN3DS) ? tIDTableNew3DS : tIDTableOld3DS);
 
 
@@ -194,12 +194,12 @@ bool launchTitle(mediatypes_enum mediaType, u8 flags, u64 titleID)
 		found:
 
 
-		if((res = APT_PrepareToStartSystemApplet(nullptr, (NS_APPID)appID)))
+		if((res = APT_PrepareToStartSystemApplet((NS_APPID)appID)))
 		{
 			aptCloseSession();
 			throw titleException(_FILE_, __LINE__, res, "Failed to prepare for system applet start!");
 		}
-		if((res = APT_StartSystemApplet(nullptr, (NS_APPID)appID, 0, 0, nullptr)))
+		if((res = APT_StartSystemApplet((NS_APPID)appID, 0, 0, nullptr)))
 		{
 			aptCloseSession();
 			throw titleException(_FILE_, __LINE__, res, "Failed to start system applet!");
@@ -208,12 +208,12 @@ bool launchTitle(mediatypes_enum mediaType, u8 flags, u64 titleID)
 	}
 	else // App
 	{
-		if((res = APT_PrepareToDoAppJump(nullptr, flags, titleID, mediaType)))
+		if((res = APT_PrepareToDoAppJump(flags, titleID, mediaType)))
 		{
 			aptCloseSession();
 			throw titleException(_FILE_, __LINE__, res, "Failed to prepare for app start!");
 		}
-		if((res = APT_DoAppJump(nullptr, 0, 0, nullptr, nullptr)))
+		if((res = APT_DoAppJump(0, 0, nullptr, nullptr)))
 		{
 			aptCloseSession();
 			throw titleException(_FILE_, __LINE__, res, "Failed to start app!");
