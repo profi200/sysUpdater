@@ -16,7 +16,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/
  */
 
-
+#include <algorithm>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -28,7 +28,42 @@
 
 #define _FILE_ "main.cpp" // Replacement for __FILE__ without the path
 
+typedef struct
+{
+	std::u16string name;
+	AM_TitleEntry entry;
+	bool requiresDelete;
+} TitleInstallInfo;
 
+// Ordered from highest to lowest priority.
+static const u32 titleTypes[7] = {
+		0x00040138, // System Firmware
+		0x00040130, // System Modules
+		0x00040030, // Applets
+		0x00040010, // System Applications
+		0x0004001B, // System Data Archives
+		0x0004009B, // System Data Archives (Shared Archives)
+		0x000400DB, // System Data Archives
+};
+
+u32 getTitlePriority(u64 id) {
+	u32 type = (u32) (id >> 32);
+	for(u32 i = 0; i < 7; i++) {
+		if(type == titleTypes[i]) {
+			return i;
+		}
+	}
+
+	return 0;
+}
+
+bool sortTitlesHighToLow(const TitleInstallInfo &a, const TitleInstallInfo &b) {
+	return getTitlePriority(a.entry.titleID) < getTitlePriority(b.entry.titleID);
+}
+
+bool sortTitlesLowToHigh(const TitleInstallInfo &a, const TitleInstallInfo &b) {
+	return getTitlePriority(a.entry.titleID) > getTitlePriority(b.entry.titleID);
+}
 
 // Fix compile error. This should be properly initialized if you fiddle with the title stuff!
 u8 sysLang = 0;
@@ -83,13 +118,13 @@ void installUpdates(bool downgrade)
 {
 	std::vector<fs::DirEntry> filesDirs = fs::listDirContents(u"/updates", u".cia;"); // Filter for .cia files
 	std::vector<TitleInfo> installedTitles = getTitleInfos(MEDIATYPE_NAND);
-	std::vector<std::u16string> remainingCias;
+	std::vector<TitleInstallInfo> titles;
+
 	Buffer<char> tmpStr(256);
 	Result res;
+	TitleInstallInfo installInfo;
 	AM_TitleEntry ciaFileInfo;
 	fs::File f;
-
-
 
 	printf("Getting CIA file informations...\n\n");
 
@@ -103,28 +138,34 @@ void installUpdates(bool downgrade)
 			int cmpResult = versionCmp(installedTitles, ciaFileInfo.titleID, ciaFileInfo.version);
 			if((downgrade && cmpResult != 0) || (cmpResult > 0))
 			{
-				if(cmpResult < 0) deleteTitle(MEDIATYPE_NAND, ciaFileInfo.titleID);
-				if(ciaFileInfo.titleID == 0x0004013800000002LL || ciaFileInfo.titleID == 0x0004013820000002LL)
-				{
-					printf("NATIVE_FIRM         ");
-					installCia(u"/updates/" + it.name, MEDIATYPE_NAND);
-					if(!downgrade) { if((res = AM_InstallNativeFirm())) throw titleException(_FILE_, __LINE__, res, "Failed to install NATIVE_FIRM!"); }
-					else { if((res = AM_InstallFirm(ciaFileInfo.titleID))) throw titleException(_FILE_, __LINE__, res, "Failed to install NATIVE_FIRM!"); }
-					printf("\x1b[32m  Installed\x1b[0m\n");
-				}
-				else remainingCias.push_back(it.name);
+				installInfo.name = it.name;
+				installInfo.entry = ciaFileInfo;
+				installInfo.requiresDelete = downgrade && cmpResult < 0;
+
+				titles.push_back(installInfo);
 			}
 		}
 	}
 
+	std::sort(titles.begin(), titles.end(), downgrade ? sortTitlesLowToHigh : sortTitlesHighToLow);
 
-	for(auto it : remainingCias)
+	for(auto it : titles)
 	{
-		tmpStr.clear();
-		utf16_to_utf8((u8*)&tmpStr, (u16*)it.c_str(), 255);
+		bool nativeFirm = it.entry.titleID == 0x0004013800000002LL || it.entry.titleID == 0x0004013820000002LL;
+		if(nativeFirm)
+		{
+			printf("NATIVE_FIRM         ");
+		} else
+		{
+			tmpStr.clear();
+			utf16_to_utf8((u8*) &tmpStr, (u16*) it.name.c_str(), 255);
 
-		printf("%s", &tmpStr);
-		installCia(u"/updates/" + it, MEDIATYPE_NAND);
+			printf("%s", &tmpStr);
+		}
+
+		if(it.requiresDelete) deleteTitle(MEDIATYPE_NAND, it.entry.titleID);
+		installCia(u"/updates/" + it.name, MEDIATYPE_NAND);
+		if(nativeFirm && (res = AM_InstallFirm(it.entry.titleID))) throw titleException(_FILE_, __LINE__, res, "Failed to install NATIVE_FIRM!");
 		printf("\x1b[32m  Installed\x1b[0m\n");
 	}
 }
