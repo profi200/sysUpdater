@@ -58,10 +58,22 @@ u32 getTitlePriority(u64 id) {
 }
 
 bool sortTitlesHighToLow(const TitleInstallInfo &a, const TitleInstallInfo &b) {
+	bool aSafe = (a.entry.titleID & 0xFF) == 0x03;
+	bool bSafe = (b.entry.titleID & 0xFF) == 0x03;
+	if(aSafe != bSafe) {
+		return aSafe;
+	}
+
 	return getTitlePriority(a.entry.titleID) < getTitlePriority(b.entry.titleID);
 }
 
 bool sortTitlesLowToHigh(const TitleInstallInfo &a, const TitleInstallInfo &b) {
+        bool aSafe = (a.entry.titleID & 0xFF) == 0x03;
+        bool bSafe = (b.entry.titleID & 0xFF) == 0x03;
+        if(aSafe != bSafe) {
+                return aSafe;
+        }
+
 	return getTitlePriority(a.entry.titleID) > getTitlePriority(b.entry.titleID);
 }
 
