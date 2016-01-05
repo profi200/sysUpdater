@@ -25,8 +25,8 @@
 #include <3ds.h>
 #include "fs.h"
 #include "misc.h"
-#include "zip.h"
-#include "unzip.h"
+//#include "zip.h"
+//#include "unzip.h"
 
 #define _FILE_ "fs.cpp" // Replacement for __FILE__ without the path
 
@@ -565,7 +565,7 @@ namespace fs
 	// Zip related functions                       ||
 	//===============================================
 
-	void copyFileToZip(const std::u16string& src, const std::string& zipPath, zipFile& zip, std::function<void (const std::u16string& file, u32 percent)> callback, FS_Archive& srcArchive)
+	/*void copyFileToZip(const std::u16string& src, const std::string& zipPath, zipFile& zip, std::function<void (const std::u16string& file, u32 percent)> callback, FS_Archive& srcArchive)
 	{
 		File inFile(src, FS_OPEN_READ, srcArchive);
 		u64 inFileSize, offset = 0;
@@ -585,9 +585,9 @@ namespace fs
 
 
 		Buffer<u8> buffer(MAX_BUF_SIZE, false);
-		if((res = zipOpenNewFileInZip4(zip, zipPath.c_str(), &fileInfo, nullptr, 0, nullptr, 0, nullptr, Z_DEFLATED, Z_DEFAULT_COMPRESSION,
-													0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, nullptr, 0, 0, 0x800 /* UTF-8 flag */)) != ZIP_OK)
-													throw fsException(_FILE_, __LINE__, res, "Failed to create file in ZIP!");
+		if((res = zipOpenNewFileInZip4(zip, zipPath.c_str(), &fileInfo, nullptr, 0, nullptr, 0, nullptr, Z_DEFLATED, Z_DEFAULT_COMPRESSION,*/
+													//0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, nullptr, 0, 0, 0x800 /* UTF-8 flag */)) != ZIP_OK)
+													/*throw fsException(_FILE_, __LINE__, res, "Failed to create file in ZIP!");
 
 
 		for(u32 i=0; i<=inFileSize / MAX_BUF_SIZE; i++)
@@ -622,9 +622,9 @@ namespace fs
 		memcpy(&fileInfo.tmz_date, time_, 24); // Copy s, m, h, d and y directly
 
 		// That's the only way to make dirs? Wtf.
-		if((res = zipOpenNewFileInZip4(zip, zipPath.c_str(), &fileInfo, nullptr, 0, nullptr, 0, nullptr, Z_BINARY, Z_NO_COMPRESSION,
-													0, 0, 0, 0, nullptr, 0, 0, 0x800 /* UTF-8 flag */)) != ZIP_OK)
-													throw fsException(_FILE_, __LINE__, res, "Failed to create directory in ZIP!");
+		if((res = zipOpenNewFileInZip4(zip, zipPath.c_str(), &fileInfo, nullptr, 0, nullptr, 0, nullptr, Z_BINARY, Z_NO_COMPRESSION,*/
+													//0, 0, 0, 0, nullptr, 0, 0, 0x800 /* UTF-8 flag */)) != ZIP_OK)
+													/*throw fsException(_FILE_, __LINE__, res, "Failed to create directory in ZIP!");
 
 		if((res = zipCloseFileInZip(zip)) != ZIP_OK) throw fsException(_FILE_, __LINE__, res, "Failed to close directory in ZIP!");
 	}
@@ -743,9 +743,9 @@ namespace fs
 			}
 			else
 			{
-        tmpOutPath.clear();
-        if(fInfo.external_fa & 0x10) zipFilePath[strlen(&zipFilePath)-1] = 0; // Remove slash from path
-        utf8_to_utf16((u16*)&tmpOutPath, (u8*)&zipFilePath, 255);
+        		tmpOutPath.clear();
+        		if(fInfo.external_fa & 0x10) zipFilePath[strlen(&zipFilePath)-1] = 0; // Remove slash from path
+        		utf8_to_utf16((u16*)&tmpOutPath, (u8*)&zipFilePath, 255);
 
 				if(fInfo.external_fa & 0x10)
 				{
@@ -803,7 +803,7 @@ namespace fs
 				else path.erase(found+1); // someDir/someDir/
 			}
 		}
-	}
+	}*/
 
 
 	//===============================================
@@ -825,43 +825,6 @@ namespace fs
 		else path.erase(lastSlash+1);
 	}
 } // namespace fs
-
-
-// Currently unused code. May be useful later
-// Commented out - do not know how to fix atm
-/*Result FSUSER_ControlArchive(Handle *handle, FS_Archive *archive)
-{
-	if(!archive)
-		return -2;
-
-	extern Handle fsuHandle;
-
-	if(!handle)
-		handle = &fsuHandle;
-
-	u32 b1, b2;
-	((u8*)&b1)[0] = 0x4E;
-	((u8*)&b2)[0] = 0xE4;
-
-	u32 *cmdbuf = getThreadCommandBuffer();
-
-	cmdbuf[0] = 0x080D0144;
-	cmdbuf[1] = archive->lowPath;
-	cmdbuf[2] = archive->handle;
-	cmdbuf[3] = 0;
-	cmdbuf[4] = 1;
-	cmdbuf[5] = 1;
-	cmdbuf[6] = 0x1A;
-	cmdbuf[7] = (u32)&b1;
-	cmdbuf[8] = 0x1C;
-	cmdbuf[9] = (u32)&b2;
-
-	Result ret = 0;
-	if((ret = svcSendSyncRequest(*handle)))
-		return ret;
-
-	return cmdbuf[1];
-}*/
 
 
 void sdmcArchiveInit()

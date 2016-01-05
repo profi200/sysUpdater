@@ -28,9 +28,9 @@ include $(DEVKITARM)/3ds_rules
 #---------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
-SOURCES		:=	source source/zip
+SOURCES		:=	source
 DATA		:=	data
-INCLUDES	:=	include include/zip
+INCLUDES	:=	include
 
 APP_TITLE		:=	sysUpdater
 APP_DESCRIPTION		:=	sysUpdater
@@ -42,7 +42,7 @@ ICON		:= /app/icon48x48.png
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard
 
-CFLAGS	:=	-g -Wall -O3 -flto -mword-relocations \
+CFLAGS	:=	-g -Wall -O2 -flto -mword-relocations \
 			-fomit-frame-pointer -ffast-math \
 			$(ARCH)
 

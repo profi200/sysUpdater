@@ -144,6 +144,12 @@ void installUpdates(bool downgrade)
 	{
 		if(!it.isDir)
 		{
+			// Quick and dirty hack to detect these pesky
+			// attribute files OSX creates.
+			// This should rather be added to the
+			// filter rules later.
+			if(it.name[0] == u'.') continue;
+
 			f.open(u"/updates/" + it.name, FS_OPEN_READ);
 			if((res = AM_GetCiaFileInfo(MEDIATYPE_NAND, &ciaFileInfo, f.getFileHandle()))) throw titleException(_FILE_, __LINE__, res, "Failed to get CIA file info!");
 
