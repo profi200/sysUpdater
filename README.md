@@ -6,7 +6,7 @@ This is not intended for installing anything else! You also should strictly avoi
 
 
 ## Only use this if you know what you do! I'm not responsive for bricks which rely on wrong usage. Use it at your own risk.
-## IMPORTANT: Don't run this with Gateway mode (it seem it always use 10.2 FIRM...) or it will brick! This is not my fault.CFW are safe since [TuxSH pull request](https://github.com/profi200/sysUpdater/pull/13). Also,do not use any other patch than signature check! (like FIRM partition writing patche)
+## IMPORTANT: Don't run this with Gateway mode (it seem it always use 10.2 FIRM...) or it will brick! This is not my fault.CFW are safe since [TuxSH pull request](https://github.com/profi200/sysUpdater/pull/13). Also,do not use any other patch than sig check disabler! (like FIRM partition writing patche)
 
 ### How to use
 
