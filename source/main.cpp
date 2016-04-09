@@ -200,8 +200,6 @@ int main()
 	printf("(A) update\n(Y) downgrade\n(B) exit\n\n");
 	printf("Use the HOME button if you run the CIA version.\n");
 	printf("If you started the update you can't abort it!\n\n");
-	printf("\x1b[31mIMPORTANT: Don't run this in sysNAND Gateway mode or it will brick!\x1b[0m\n\n\n");
-
 
 	while(aptMainLoop())
 	{
