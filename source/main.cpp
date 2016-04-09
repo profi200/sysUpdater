@@ -199,7 +199,7 @@ int main()
 	printf("sysUpdater 0.4.2b by profi200\n\n\n");
 	printf("(A) update\n(Y) downgrade\n(B) exit\n\n");
 	printf("Use the HOME button if you run the CIA version.\n");
-	printf("If you started the update you can't abort it!\n\n");
+	printf("If you started the update you can't abort it!\n\n\n");
 
 	while(aptMainLoop())
 	{
