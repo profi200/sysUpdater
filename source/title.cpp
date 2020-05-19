@@ -38,11 +38,6 @@ std::vector<TitleInfo> getTitleInfos(FS_MediaType mediaType)
 	Handle fileHandle;
 	TitleInfo tmpTitleInfo;
 
-	u32 archiveLowPath[4] = {0, 0, mediaType, 0};
-	const FS_Archive iconArchive = {0x2345678A, {PATH_BINARY, 0x10, (u8*)archiveLowPath}};
-	const u32 fileLowPath[5] = {0, 0, 2, 0x6E6F6369, 0};
-	const FS_Path filePath = {PATH_BINARY, 0x14, (const u8*)fileLowPath};
-
 
 	if((res = AM_GetTitleCount(mediaType, &count))) throw titleException(_FILE_, __LINE__, res, "Failed to get title count!");
 
@@ -54,8 +49,8 @@ std::vector<TitleInfo> getTitleInfos(FS_MediaType mediaType)
 
 
 
-	if((res = AM_GetTitleIdList(mediaType, count, &titleIdList))) throw titleException(_FILE_, __LINE__, res, "Failed to get title ID list!");
-	if((res = AM_ListTitles(mediaType, count, &titleIdList, &titleList))) throw titleException(_FILE_, __LINE__, res, "Failed to get title list!");
+	if((res = AM_GetTitleList(&count, mediaType, count, &titleIdList))) throw titleException(_FILE_, __LINE__, res, "Failed to get title ID list!");
+	if((res = AM_GetTitleInfo(mediaType, count, &titleIdList, &titleList))) throw titleException(_FILE_, __LINE__, res, "Failed to get title list!");
 	for(u32 i=0; i<count; i++)
 	{
 		// Copy title ID, size and version directly
@@ -63,10 +58,14 @@ std::vector<TitleInfo> getTitleInfos(FS_MediaType mediaType)
 		if(AM_GetTitleProductCode(mediaType, titleIdList[i], tmpStr)) memset(tmpStr, 0, 16);
 		tmpTitleInfo.productCode = tmpStr;
 
+		u32 archiveLowPath[4] = {0, 0, mediaType, 0};
 		// Copy the title ID into our archive low path
 		memcpy(archiveLowPath, &titleIdList[i], 8);
 		icon.clear();
-		if(!FSUSER_OpenFileDirectly(&fileHandle, iconArchive, filePath, FS_OPEN_READ, 0))
+		static const u32 fileLowPath[5] = {0, 0, 2, 0x6E6F6369, 0};
+		if(!FSUSER_OpenFileDirectly(&fileHandle, ARCHIVE_SAVEDATA_AND_CONTENT,
+		                            {PATH_BINARY, 0x10, archiveLowPath},
+		                            {PATH_BINARY, 0x14, fileLowPath}, FS_OPEN_READ, 0))
 		{
 			// Nintendo decided to release a title with an icon entry but with size 0 so this will fail.
 			// Ignoring errors because of this here.
@@ -113,7 +112,7 @@ void installCia(const std::u16string& path, FS_MediaType mediaType, std::functio
 				cia.write(&buffer, blockSize);
 			} catch(fsException& e)
 			{
-				AM_CancelCIAInstall(&ciaHandle); // Abort installation
+				AM_CancelCIAInstall(ciaHandle); // Abort installation
 				cia.setFileHandle(0); // Reset the handle so it doesn't get closed twice
 				throw;
 			}
@@ -123,7 +122,7 @@ void installCia(const std::u16string& path, FS_MediaType mediaType, std::functio
 		}
 	}
 
-	if((res = AM_FinishCiaInstall(mediaType, &ciaHandle))) throw titleException(_FILE_, __LINE__, res, "Failed to finish CIA installation!");
+	if((res = AM_FinishCiaInstall(ciaHandle))) throw titleException(_FILE_, __LINE__, res, "Failed to finish CIA installation!");
 }
 
 
@@ -140,10 +139,10 @@ void deleteTitle(FS_MediaType mediaType, u64 titleID)
 
 // TODO: Find a way to translate the title ID to an appID without lookup tables (this looks ugly :|)
 //       Fix the weird freeze which sometimes happens at applet launch
-bool launchTitle(FS_MediaType mediaType, u8 flags, u64 titleID)
+/*bool launchTitle(FS_MediaType mediaType, u8 flags, u64 titleID)
 {
 	Result res;
-	u8 isN3DS;
+	bool isN3DS;
 	u32 appID;
 	const u32 appIDTable[9] = {0x101, 0x103, 0x110, 0x112, 0x113, 0x114, 0x115, 0x116, 0x117};
 	const u32 tIDTableOld3DS[9][3] = {
@@ -173,8 +172,6 @@ bool launchTitle(FS_MediaType mediaType, u8 flags, u64 titleID)
 	const u32 (*tIDTable)[3] = ((isN3DS) ? tIDTableNew3DS : tIDTableOld3DS);
 
 
-	aptOpenSession();
-
 	if(titleID>>32 == 0x40030) // Applet
 	{
 		// Search the the title ID lower word in our title ID table
@@ -196,12 +193,10 @@ bool launchTitle(FS_MediaType mediaType, u8 flags, u64 titleID)
 
 		if((res = APT_PrepareToStartSystemApplet((NS_APPID)appID)))
 		{
-			aptCloseSession();
 			throw titleException(_FILE_, __LINE__, res, "Failed to prepare for system applet start!");
 		}
-		if((res = APT_StartSystemApplet((NS_APPID)appID, 0, 0, nullptr)))
+		if((res = APT_StartSystemApplet((NS_APPID)appID, nullptr, 0, 0)))
 		{
-			aptCloseSession();
 			throw titleException(_FILE_, __LINE__, res, "Failed to start system applet!");
 		}
 		aptSetStatus(APP_EXITING);
@@ -210,16 +205,13 @@ bool launchTitle(FS_MediaType mediaType, u8 flags, u64 titleID)
 	{
 		if((res = APT_PrepareToDoAppJump(flags, titleID, mediaType)))
 		{
-			aptCloseSession();
 			throw titleException(_FILE_, __LINE__, res, "Failed to prepare for app start!");
 		}
 		if((res = APT_DoAppJump(0, 0, nullptr, nullptr)))
 		{
-			aptCloseSession();
 			throw titleException(_FILE_, __LINE__, res, "Failed to start app!");
 		}
 	}
 
-	aptCloseSession();
 	return true; // Applet launch was successful
-}
+}*/

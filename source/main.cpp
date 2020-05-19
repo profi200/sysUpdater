@@ -219,9 +219,7 @@ int main()
 					printf("\n\nUpdates installed. Rebooting in 10 seconds...\n");
 					svcSleepThread(10000000000LL);
 
-					aptOpenSession();
 					APT_HardwareResetAsync();
-					aptCloseSession();
 					once = true;
 				}
 				catch(fsException& e)

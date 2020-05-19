@@ -829,11 +829,10 @@ namespace fs
 
 void sdmcArchiveInit()
 {
-	sdmcArchive = (FS_Archive){0x00000009, (FS_Path){PATH_EMPTY, 1, (u8*)""}};
-	FSUSER_OpenArchive(&sdmcArchive);
+	FSUSER_OpenArchive(&sdmcArchive, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""));
 }
 
 void sdmcArchiveExit()
 {
-	FSUSER_CloseArchive(&sdmcArchive);
+	FSUSER_CloseArchive(sdmcArchive);
 }

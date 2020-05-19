@@ -94,7 +94,7 @@ struct Icon
 std::vector<TitleInfo> getTitleInfos(FS_MediaType mediaType);
 void installCia(const std::u16string& path, FS_MediaType mediaType, std::function<void (const std::u16string& file, u32 percent)> callback=nullptr);
 void deleteTitle(FS_MediaType mediaType, u64 titleID);
-bool launchTitle(FS_MediaType mediaType, u8 flags, u64 titleID); // On applet launch it returns false if the applet can't be lauched
+//bool launchTitle(FS_MediaType mediaType, u8 flags, u64 titleID); // On applet launch it returns false if the applet can't be lauched
 #define relaunchApp() launchTitle(mediatype_SDMC, 2, 0)
 
 #endif // _TITLE_H_
