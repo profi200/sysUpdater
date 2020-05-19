@@ -196,7 +196,7 @@ int main()
 
 	consoleInit(GFX_TOP, NULL);
 
-	printf("sysUpdater 0.4.2b by profi200\n\n\n");
+	printf("sysUpdater 0.4.3b by profi200\n\n\n");
 	printf("(A) update\n(Y) downgrade\n(B) exit\n\n");
 	printf("Use the HOME button if you run the CIA version.\n");
 	printf("If you started the update you can't abort it!\n\n\n");
